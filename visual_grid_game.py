@@ -2,6 +2,8 @@
 import random
 import tkinter as tk
 
+from agent import SearchAgent
+
 DIRECTION_VECTORS = {
     'Up': (0, 1),
     'Down': (0, -1),
@@ -98,9 +100,17 @@ class VisualGridHuntGame:
             'smells_toxin':
                 tuple(self.agent_pos) in self.toxic_traps,
 
-            'collision': self.collision
-        }
+            'collision': self.collision,
 
+            # Lab 3 - expose the world model
+            'grid_size': (self.width, self.height),
+            'walls': list(self.walls),
+            'all_food': list(self.food_positions),
+
+            # Needed by our planning agent
+            'agent_pos': tuple(self.agent_pos),
+            'agent_direction': self.agent_direction
+        }
     def execute_action(self, action):
         self.steps += 1
 
@@ -188,7 +198,7 @@ class VisualGridHuntGame:
                 self.collision = True
 
     def is_done(self) -> bool:
-        return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+        return len(self.food_positions) == 0 or self.steps >= 200 or self.collision
 
 class SimpleReflexAgent:
 
@@ -338,15 +348,31 @@ class GridGameGUI:
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
 
-        # Easy switch between the two Lab 2 agents
         if agent_type == 'simple':
+
             self.agent = SimpleReflexAgent()
             self.agent_name = 'Simple Reflex Agent'
+
         elif agent_type == 'model':
+
             self.agent = ModelBasedAgent()
             self.agent_name = 'Model-Based Agent'
+
+        elif agent_type == 'search':
+
+            self.agent = SearchAgent()
+
+            self.agent_name = (
+                f"Search Agent "
+                f"({self.agent.active_algo})"
+            )
+
         else:
-            raise ValueError("agent_type must be 'simple' or 'model'")
+
+            raise ValueError(
+                "agent_type must be "
+                "'simple', 'model', or 'search'"
+            )
 
         self.root.title(f"IT3012 - {self.agent_name}")
 
@@ -488,7 +514,7 @@ if __name__ == "__main__":
     # Change only this value when testing:
     # 'simple' -> Simple Reflex Agent
     # 'model'  -> Model-Based Agent
-    AGENT_TYPE = 'model'
+    AGENT_TYPE = 'search'
 
     root = tk.Tk()
 
