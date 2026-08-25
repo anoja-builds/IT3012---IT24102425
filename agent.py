@@ -1,4 +1,5 @@
 # agent.py
+import math
 import random
 from collections import deque
 import heapq
@@ -30,7 +31,7 @@ class SearchAgent:
 
     def __init__(self):
         self.plan = []
-        self.active_algo = 'UCS'
+        self.active_algo = 'AStar'
 
     def get_next_state(self, state, action, grid_size, walls):
 
@@ -281,6 +282,127 @@ class SearchAgent:
         return []
 
 
+    def astar_search(
+        self,
+        start_pos,
+        goal_pos,
+        walls,
+        grid_size,
+        heuristic_type='manhattan'
+    ):
+        frontier = []
+        reached_states = set()
+
+        actions = [
+            'MoveForward',
+            'TurnLeft',
+            'TurnRight'
+        ]
+
+        # Starting position without direction
+        start_xy = (
+            start_pos[0],
+            start_pos[1]
+        )
+
+        # Calculate starting heuristic h(n)
+        if heuristic_type == 'euclidean':
+            h_cost = self.euclidean_distance(
+                start_xy,
+                goal_pos
+            )
+        else:
+            h_cost = self.manhattan_distance(
+                start_xy,
+                goal_pos
+            )
+
+        # Starting g(n) and f(n)
+        g_cost = 0
+        f_cost = g_cost + h_cost
+
+        # Add starting state to priority queue
+        heapq.heappush(
+            frontier,
+            (
+                f_cost,
+                g_cost,
+                start_pos,
+                []
+            )
+        )
+
+        while frontier:
+            (
+                f_cost,
+                g_cost,
+                current_state,
+                path_taken
+            ) = heapq.heappop(frontier)
+
+            # Skip already visited states
+            if current_state in reached_states:
+                continue
+
+            current_x = current_state[0]
+            current_y = current_state[1]
+
+            # Check if goal reached
+            if (current_x, current_y) == goal_pos:
+                return path_taken
+
+            reached_states.add(current_state)
+
+            # Try possible actions
+            for action in actions:
+                next_state = self.get_next_state(
+                    current_state,
+                    action,
+                    grid_size,
+                    walls
+                )
+
+                if (
+                    next_state is not None
+                    and next_state not in reached_states
+                ):
+                    # New path cost
+                    new_g_cost = g_cost + 1
+
+                    next_xy = (
+                        next_state[0],
+                        next_state[1]
+                    )
+
+                    # New heuristic
+                    if heuristic_type == 'euclidean':
+                        new_h_cost = self.euclidean_distance(
+                            next_xy,
+                            goal_pos
+                        )
+                    else:
+                        new_h_cost = self.manhattan_distance(
+                            next_xy,
+                            goal_pos
+                        )
+
+                    # f(n) = g(n) + h(n)
+                    new_f_cost = new_g_cost + new_h_cost
+                    new_path = path_taken + [action]
+
+                    heapq.heappush(
+                        frontier,
+                        (
+                            new_f_cost,
+                            new_g_cost,
+                            next_state,
+                            new_path
+                        )
+                    )
+
+        return []
+
+
     def sense_and_act(self, percept):
 
         # Food underneath us -> collect it
@@ -346,6 +468,17 @@ class SearchAgent:
                     walls
                 )
 
+
+
+            elif self.active_algo == 'AStar':
+                self.plan = self.astar_search(
+                    start,
+                    target,
+                    walls,
+                    grid_size,
+                    heuristic_type='manhattan'
+                )
+
             print("Algorithm:", self.active_algo)
             print("Start:", start)
             print("Target:", target)
@@ -355,3 +488,41 @@ class SearchAgent:
             return self.plan.pop(0)
 
         return 'TurnLeft'
+
+
+
+    def manhattan_distance(self, pos, goal):
+        return abs(pos[0] - goal[0]) + abs(pos[1] - goal[1])
+
+
+    def euclidean_distance(self, pos, goal):
+        return math.sqrt(
+            (pos[0] - goal[0]) ** 2
+            + (pos[1] - goal[1]) ** 2
+        )
+
+if __name__ == "__main__":
+
+    test_agent = SearchAgent()
+
+    print(
+        "Manhattan Distance:",
+        test_agent.manhattan_distance((0, 0), (3, 4))
+    )
+
+    print(
+        "Euclidean Distance:",
+        test_agent.euclidean_distance((0, 0), (3, 4))
+    )
+
+    print("\nTesting A*:")
+
+    plan = test_agent.astar_search(
+        start_pos=(0, 0, 'Right'),
+        goal_pos=(3, 0),
+        walls=set(),
+        grid_size=(5, 5),
+        heuristic_type='manhattan'
+    )
+
+    print("A* Plan:", plan)
