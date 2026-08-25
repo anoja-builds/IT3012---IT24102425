@@ -2,6 +2,13 @@
 import random
 import tkinter as tk
 
+DIRECTION_VECTORS = {
+    'Up': (0, 1),
+    'Down': (0, -1),
+    'Left': (-1, 0),
+    'Right': (1, 0)
+}
+
 
 class VisualGridHuntGame:
     """A flexible Pacman-style grid environment with support for configurable opponents and larger scales."""
@@ -10,6 +17,7 @@ class VisualGridHuntGame:
         self.width = width
         self.height = height
         self.agent_pos = [0, 0]  # Starting position (x, y)
+        self.agent_direction = 'Right'
 
         if custom_walls is not None:
             self.walls = set(custom_walls)
@@ -56,16 +64,41 @@ class VisualGridHuntGame:
         self.steps = 0
         self.collision = False
 
-    def get_percept(self) -> dict:
+
+    def get_cell_ahead(self):
+        dx, dy = DIRECTION_VECTORS[self.agent_direction]
+
+        return (
+            self.agent_pos[0] + dx,
+            self.agent_pos[1] + dy
+        )  
+
+
+    def is_blocked(self, position):
+        x, y = position
+
+        outside_grid = (
+            x < 0 or
+            x >= self.width or
+            y < 0 or
+            y >= self.height
+        )
+
+        return outside_grid or position in self.walls  
+
+    def get_percept(self):
+        cell_ahead = self.get_cell_ahead()
+
         return {
-            'agent_pos': list(self.agent_pos),
-            'opponent_positions': [list(op) for op in self.opponents],
-            'smells_food': tuple(self.agent_pos) in self.food_positions,
-            'hit_wall': tuple(self.agent_pos) in self.walls,
-            'collision': self.collision,
-            'score': self.score,
-            'remaining_food': len(self.food_positions),
-            'smells_toxin': tuple(self.agent_pos) in self.toxic_traps,
+            'wall_ahead': self.is_blocked(cell_ahead),
+
+            'food_here':
+                tuple(self.agent_pos) in self.food_positions,
+
+            'smells_toxin':
+                tuple(self.agent_pos) in self.toxic_traps,
+
+            'collision': self.collision
         }
 
     def execute_action(self, action: str):
