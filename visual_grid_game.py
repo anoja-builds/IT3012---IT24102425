@@ -149,6 +149,44 @@ class VisualGridHuntGame:
                     new_pos[1]
                 ]
 
+                # Lab 1: toxic-trap penalty
+                if tuple(self.agent_pos) in self.toxic_traps:
+                    self.score -= 15
+
+        # Preserve opponent movement from the original environment
+        for op in self.opponents:
+            move = random.choice([
+                'Up',
+                'Down',
+                'Left',
+                'Right',
+                'Stay'
+            ])
+
+            if move == 'Up' and op[1] < self.height - 1:
+                candidate = (op[0], op[1] + 1)
+                if candidate not in self.walls:
+                    op[1] += 1
+
+            elif move == 'Down' and op[1] > 0:
+                candidate = (op[0], op[1] - 1)
+                if candidate not in self.walls:
+                    op[1] -= 1
+
+            elif move == 'Left' and op[0] > 0:
+                candidate = (op[0] - 1, op[1])
+                if candidate not in self.walls:
+                    op[0] -= 1
+
+            elif move == 'Right' and op[0] < self.width - 1:
+                candidate = (op[0] + 1, op[1])
+                if candidate not in self.walls:
+                    op[0] += 1
+
+            if op == self.agent_pos:
+                self.score -= 50
+                self.collision = True
+
     def is_done(self) -> bool:
         return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
 
@@ -164,17 +202,153 @@ class SimpleReflexAgent:
 
         return 'MoveForward'    
 
+class ModelBasedAgent:
+
+    def __init__(self):
+        self.estimated_pos = (0, 0)
+        self.estimated_direction = 'Right'
+
+        self.visited_cells = {(0, 0)}
+
+        self.last_action = None
+
+
+    def get_left_direction(self):
+
+        directions = ['Up', 'Right', 'Down', 'Left']
+
+        current_index = directions.index(
+            self.estimated_direction
+        )
+
+        return directions[
+            (current_index - 1) % 4
+        ]
+
+
+    def get_right_direction(self):
+
+        directions = ['Up', 'Right', 'Down', 'Left']
+
+        current_index = directions.index(
+            self.estimated_direction
+        )
+
+        return directions[
+            (current_index + 1) % 4
+        ]
+
+
+    def get_relative_cell(self, direction):
+
+        dx, dy = DIRECTION_VECTORS[direction]
+
+        return (
+            self.estimated_pos[0] + dx,
+            self.estimated_pos[1] + dy
+        )
+
+    def update_state(self):
+
+        if self.last_action == 'TurnLeft':
+
+            self.estimated_direction = (
+                self.get_left_direction()
+            )
+
+        elif self.last_action == 'TurnRight':
+
+            self.estimated_direction = (
+                self.get_right_direction()
+            )
+
+        elif self.last_action == 'MoveForward':
+
+            self.estimated_pos = (
+                self.get_relative_cell(
+                    self.estimated_direction
+                )
+            )
+
+        self.visited_cells.add(
+            self.estimated_pos
+        )
+
+    def sense_and_act(self, percept):
+
+        self.update_state()
+
+        if percept['food_here']:
+            action = 'Suck'
+
+        else:
+
+            ahead = self.get_relative_cell(
+                self.estimated_direction
+            )
+
+            left_direction = (
+                self.get_left_direction()
+            )
+
+            right_direction = (
+                self.get_right_direction()
+            )
+
+            left_cell = self.get_relative_cell(
+                left_direction
+            )
+
+            right_cell = self.get_relative_cell(
+                right_direction
+            )
+
+            if percept['wall_ahead']:
+
+                if left_cell not in self.visited_cells:
+                    action = 'TurnLeft'
+
+                elif right_cell not in self.visited_cells:
+                    action = 'TurnRight'
+
+                else:
+                    action = 'TurnRight'
+
+            elif ahead in self.visited_cells:
+
+                if left_cell not in self.visited_cells:
+                    action = 'TurnLeft'
+
+                else:
+                    action = 'TurnRight'
+
+            else:
+                action = 'MoveForward'
+
+        self.last_action = action
+
+        return action
 
 class GridGameGUI:
     """Tkinter wrapper that dynamically scales cell sizes to keep larger grids on screen."""
 
-    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None):
+    def __init__(self, root, width=10, height=10, num_food=12, num_opponents=2, walls=None, agent_type='model'):
         self.root = root
-        self.root.title("IT3012 - Scalable Multi-Agent Grid Hunt")
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
-        self.agent = SimpleReflexAgent()
+
+        # Easy switch between the two Lab 2 agents
+        if agent_type == 'simple':
+            self.agent = SimpleReflexAgent()
+            self.agent_name = 'Simple Reflex Agent'
+        elif agent_type == 'model':
+            self.agent = ModelBasedAgent()
+            self.agent_name = 'Model-Based Agent'
+        else:
+            raise ValueError("agent_type must be 'simple' or 'model'")
+
+        self.root.title(f"IT3012 - {self.agent_name}")
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -186,7 +360,7 @@ class GridGameGUI:
         self.canvas = tk.Canvas(root, width=canvas_w, height=canvas_h, bg="white")
         self.canvas.pack()
 
-        self.label = tk.Label(root, text="Score: 0 | Steps: 0", font=("Arial", 14))
+        self.label = tk.Label(root, text=f"{self.agent_name} | Score: 0 | Steps: 0", font=("Arial", 14))
         self.label.pack(pady=10)
 
         self.btn = tk.Button(root, text="Start Simulation", command=self.run_loop, font=("Arial", 12), bg="#000066",
@@ -256,6 +430,22 @@ class GridGameGUI:
         self.canvas.create_oval(x1, y1, x1 + self.cell_size * 0.7, y1 + self.cell_size * 0.7, fill="#000066",
                                 outline="#1e3a8a")
 
+        # Show the direction the agent is currently facing
+        direction_symbols = {
+            'Up': '↑',
+            'Down': '↓',
+            'Left': '←',
+            'Right': '→'
+        }
+
+        self.canvas.create_text(
+            x1 + self.cell_size * 0.35,
+            y1 + self.cell_size * 0.35,
+            text=direction_symbols[self.env.agent_direction],
+            fill="white",
+            font=("Arial", max(10, self.cell_size // 3), "bold")
+        )
+
     def run_loop(self):
         self.btn.config(state="disabled")
 
@@ -266,13 +456,25 @@ class GridGameGUI:
                 action = self.agent.sense_and_act(percept)
 
                 self.env.execute_action(action)
-                self.env.execute_action(action)
 
                 self.draw_grid()
-                self.label.config(text=f"Score: {self.env.score} | Steps: {self.env.steps} | Action: {action}")
+                self.label.config(
+                    text=(
+                        f"{self.agent_name} | Score: {self.env.score} | "
+                        f"Steps: {self.env.steps} | "
+                        f"Action: {action} | "
+                        f"Percept: {percept}"
+                    )
+                )
+
                 self.root.after(250, step)
+
             else:
-                end_text = f"Collision! Game Over! Final Score: {self.env.score}" if self.env.collision else f"Finished! Final Score: {self.env.score}"
+                end_text = (
+                    f"{self.agent_name} Finished! Final Score: {self.env.score} | "
+                    f"Steps: {self.env.steps}"
+                )
+
                 self.label.config(text=end_text)
                 self.btn.config(state="normal")
 
@@ -280,7 +482,23 @@ class GridGameGUI:
 
 
 if __name__ == "__main__":
+    # Keep the same random layout when comparing the two agents.
+    random.seed(42)
+
+    # Change only this value when testing:
+    # 'simple' -> Simple Reflex Agent
+    # 'model'  -> Model-Based Agent
+    AGENT_TYPE = 'model'
+
     root = tk.Tk()
-    # Try a larger grid size like 12x12 with 15 food and 3 opponents!
-    app = GridGameGUI(root, width=12, height=12, num_food=15, num_opponents=0)
+
+    app = GridGameGUI(
+        root,
+        width=12,
+        height=12,
+        num_food=15,
+        num_opponents=0,
+        agent_type=AGENT_TYPE
+    )
+
     root.mainloop()
