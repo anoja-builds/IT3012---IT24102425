@@ -101,53 +101,68 @@ class VisualGridHuntGame:
             'collision': self.collision
         }
 
-    def execute_action(self, action: str):
+    def execute_action(self, action):
         self.steps += 1
-        old_pos = tuple(self.agent_pos)
-        new_pos = list(self.agent_pos)
 
-        if action == 'Up':
-            new_pos[1] = min(self.height - 1, new_pos[1] + 1)
-        elif action == 'Down':
-            new_pos[1] = max(0, new_pos[1] - 1)
-        elif action == 'Left':
-            new_pos[0] = max(0, new_pos[0] - 1)
-        elif action == 'Right':
-            new_pos[0] = min(self.width - 1, new_pos[0] + 1)
+        if action == 'Suck':
 
-        if tuple(new_pos) in self.walls:
-            self.score -= 5
-        else:
-            self.agent_pos = new_pos
+            current_pos = tuple(self.agent_pos)
 
-            if (
-                tuple(self.agent_pos) in self.toxic_traps
-                and tuple(self.agent_pos) != old_pos
-            ):
-                self.score -= 15
+            if current_pos in self.food_positions:
+                self.food_positions.remove(current_pos)
+                self.score += 20
 
-        tuple_pos = tuple(self.agent_pos)
-        if tuple_pos in self.food_positions:
-            self.food_positions.remove(tuple_pos)
-            self.score += 20
+        elif action == 'TurnLeft':
 
-        for op in self.opponents:
-            move = random.choice(['Up', 'Down', 'Left', 'Right', 'Stay'])
-            if move == 'Up' and op[1] < self.height - 1:
-                op[1] += 1
-            elif move == 'Down' and op[1] > 0:
-                op[1] -= 1
-            elif move == 'Left' and op[0] > 0:
-                op[0] -= 1
-            elif move == 'Right' and op[0] < self.width - 1:
-                op[0] += 1
+            directions = ['Up', 'Left', 'Down', 'Right']
 
-            if op == self.agent_pos:
-                self.score -= 50
-                self.collision = True
+            current_index = directions.index(
+                self.agent_direction
+            )
+
+            self.agent_direction = directions[
+                (current_index + 1) % 4
+            ]
+
+        elif action == 'TurnRight':
+
+            directions = ['Up', 'Right', 'Down', 'Left']
+
+            current_index = directions.index(
+                self.agent_direction
+            )
+
+            self.agent_direction = directions[
+                (current_index + 1) % 4
+            ]
+
+        elif action == 'MoveForward':
+
+            new_pos = self.get_cell_ahead()
+
+            if self.is_blocked(new_pos):
+                self.score -= 5
+
+            else:
+                self.agent_pos = [
+                    new_pos[0],
+                    new_pos[1]
+                ]
 
     def is_done(self) -> bool:
         return len(self.food_positions) == 0 or self.steps >= 60 or self.collision
+
+class SimpleReflexAgent:
+
+    def sense_and_act(self, percept):
+
+        if percept['food_here']:
+            return 'Suck'
+
+        if percept['wall_ahead']:
+            return 'TurnLeft'
+
+        return 'MoveForward'    
 
 
 class GridGameGUI:
@@ -159,6 +174,7 @@ class GridGameGUI:
 
         self.env = VisualGridHuntGame(width=width, height=height, num_food=num_food, num_opponents=num_opponents,
                                       custom_walls=walls)
+        self.agent = SimpleReflexAgent()
 
         # Dynamically calculate cell size so the total canvas fits nicely within a 600x600 window ceiling
         max_canvas_dim = 600
@@ -245,7 +261,11 @@ class GridGameGUI:
 
         def step():
             if not self.env.is_done():
-                action = random.choice(['Up', 'Down', 'Left', 'Right'])
+                percept = self.env.get_percept()
+
+                action = self.agent.sense_and_act(percept)
+
+                self.env.execute_action(action)
                 self.env.execute_action(action)
 
                 self.draw_grid()
