@@ -30,7 +30,7 @@ class SearchAgent:
 
     def __init__(self):
         self.plan = []
-        self.active_algo = 'BFS'
+        self.active_algo = 'UCS'
 
     def get_next_state(self, state, action, grid_size, walls):
 
@@ -143,6 +143,144 @@ class SearchAgent:
         return []
 
 
+    def dfs_search(
+        self,
+        start,
+        target,
+        grid_size,
+        walls
+    ):
+
+        frontier = [
+            (start, [])
+        ]
+
+        reached = {start}
+
+        actions = [
+            'MoveForward',
+            'TurnLeft',
+            'TurnRight'
+        ]
+
+        while frontier:
+
+            # DFS uses a LIFO stack
+            state, path = frontier.pop()
+
+            x, y, direction = state
+
+            # Goal test
+            if (x, y) == target:
+                return path
+
+            for action in actions:
+
+                next_state = self.get_next_state(
+                    state,
+                    action,
+                    grid_size,
+                    walls
+                )
+
+                if (
+                    next_state is not None
+                    and
+                    next_state not in reached
+                ):
+
+                    reached.add(next_state)
+
+                    new_path = path + [action]
+
+                    frontier.append(
+                        (
+                            next_state,
+                            new_path
+                        )
+                    )
+
+        return []
+
+
+    def ucs_search(
+        self,
+        start,
+        target,
+        grid_size,
+        walls
+    ):
+
+        frontier = []
+
+        counter = 0
+
+        heapq.heappush(
+            frontier,
+            (
+                0,
+                counter,
+                start,
+                []
+            )
+        )
+
+        reached = set()
+
+        actions = [
+            'MoveForward',
+            'TurnLeft',
+            'TurnRight'
+        ]
+
+        while frontier:
+
+            cost, _, state, path = heapq.heappop(
+                frontier
+            )
+
+            if state in reached:
+                continue
+
+            reached.add(state)
+
+            x, y, direction = state
+
+            if (x, y) == target:
+                return path
+
+            for action in actions:
+
+                next_state = self.get_next_state(
+                    state,
+                    action,
+                    grid_size,
+                    walls
+                )
+
+                if (
+                    next_state is not None
+                    and next_state not in reached
+                ):
+
+                    new_cost = cost + 1
+                    new_path = path + [action]
+
+                    counter += 1
+
+                    heapq.heappush(
+                        frontier,
+                        (
+                            new_cost,
+                            counter,
+                            next_state,
+                            new_path
+                        )
+                    )
+
+        return []
+
+
     def sense_and_act(self, percept):
 
         # Food underneath us -> collect it
@@ -180,12 +318,33 @@ class SearchAgent:
                 percept['walls']
             )
 
-            self.plan = self.bfs_search(
-                start,
-                target,
-                grid_size,
-                walls
-            )
+            if self.active_algo == 'BFS':
+
+                self.plan = self.bfs_search(
+                    start,
+                    target,
+                    grid_size,
+                    walls
+                )
+
+            elif self.active_algo == 'DFS':
+
+                self.plan = self.dfs_search(
+                    start,
+                    target,
+                    grid_size,
+                    walls
+                )
+
+
+            elif self.active_algo == 'UCS':
+
+                self.plan = self.ucs_search(
+                    start,
+                    target,
+                    grid_size,
+                    walls
+                )
 
             print("Algorithm:", self.active_algo)
             print("Start:", start)
